@@ -1,12 +1,19 @@
 #!/usr/bin/python
 
-import json
 import logging
-
 from oauthlib.oauth2 import BackendApplicationClient
-from requests.models import HTTPError
-
 from token_refetcher_oauth2session import TokenReFetcherOAuth2Session
+
+
+class HTTPError(IOError):
+    def __init__(self, *args, **kwargs):
+        """Initialize HTTPError with `response` objects."""
+        response = kwargs.pop('response', None)
+        self.response = response
+        super(IOError, self).__init__(*args, **kwargs)
+
+    def __str__(self):
+        return '{} with status code: {}'.format(self.message, self.response.status_code)
 
 
 class Luminate(object):
@@ -192,7 +199,7 @@ class Luminate(object):
             raise HTTPError("failed to destroy user sessions", response=response)
 
     def __batch_execute(self, f, user_email):
-        res = {"success": [], "failure": []}
+        res = {"success": {}, "failure": {}}
 
         results = self.get_user(user_email)
         users = self.__filter_safe_user_id_identity_provider(results)
@@ -200,11 +207,13 @@ class Luminate(object):
         for user in users:
             try:
                 f(user.id, user.provider_id)
-                res["success"].append("{} from {}".format(user.email, user.provider_name))
+                if user.provider_name not in res["success"]:
+                    res["success"][user.provider_name] = []
+                res["success"][user.provider_name].append({user.id: "DONE"})
             except HTTPError, e:
-                res["failure"].append(
-                    "{} from {} Got Error:{}".format(user.email, user.provider_name, e))
-
+                if user.provider_name not in res["failure"]:
+                    res["failure"][user.provider_name] = []
+                res["failure"][user.provider_name].append({user.id: str(e)})
         return res
 
     def block_user_by_email(self, user_email):
