@@ -205,7 +205,7 @@ class Luminate(object):
                 res["failure"].append(
                     "{} from {} Got Error:{}".format(user.email, user.provider_name, e))
 
-        return json.dumps(res)
+        return res
 
     def block_user_by_email(self, user_email):
         """
