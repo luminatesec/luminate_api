@@ -1,7 +1,9 @@
 #!/usr/bin/python
 
 import logging
+
 from oauthlib.oauth2 import BackendApplicationClient
+
 from token_refetcher_oauth2session import TokenReFetcherOAuth2Session
 
 
@@ -210,7 +212,7 @@ class Luminate(object):
                 if user.provider_name not in res["success"]:
                     res["success"][user.provider_name] = []
                 res["success"][user.provider_name].append({user.id: "DONE"})
-            except HTTPError, e:
+            except HTTPError as e:
                 if user.provider_name not in res["failure"]:
                     res["failure"][user.provider_name] = []
                 res["failure"][user.provider_name].append({user.id: str(e)})
