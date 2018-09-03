@@ -12,5 +12,6 @@ setup(
     install_requires=[
         'oauthlib==2.1.0',
         'requests-oauthlib==1.0.0',
+        'requests'
     ],
 )
