@@ -161,7 +161,7 @@ class LuminateV2Client(object):
         :exception: HTTPError in case of unexpected status code
         """
 
-        url = '{}/v2/sessions/destroy'.format(self._server, self._api_version)
+        url = '{}/{}/sessions/destroy'.format(self._server, self._api_version)
 
         payload = {
             'identity_provider_id': identity_provider_id,
@@ -290,14 +290,14 @@ class LuminateV2Client(object):
         response.raise_for_status()
 
     def assign_entity_to_app(self, app_id, identifier_in_provider, identity_provider_id,
-                             identity_provider_type, type):
+                             identity_provider_type, entity_type):
         """
         Assign a user to an application.
         :param app_id: Application ID
         :param identifier_in_provider: The identifier of this entity in the identity provider owning this directory entity.
         :param identity_provider_id: The identity provider owning this directory entity.
         :param identity_provider_type: The identity provider owning this directory entity (Local/ActiveDirectory/Okta).
-        :param type: type as sting can be User/Group/OU
+        :param entity_type: type as sting can be User/Group/OU
 
         """
 
@@ -309,7 +309,7 @@ class LuminateV2Client(object):
                 'identifierInProvider': identifier_in_provider,
                 'identityProviderId': identity_provider_id,
                 'identityProviderType': identity_provider_type,
-                'type': type
+                'type': entity_type
             }
         }
 
