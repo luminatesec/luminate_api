@@ -10,7 +10,7 @@ setup(
     author_email='info@luminate.io',
     description='Python implementation of Lumiante REST API',
     install_requires=[
-        'oauthlib==2.0.4',
-        'requests-oauthlib==0.8.0',
+        'oauthlib==2.1.0',
+        'requests-oauthlib==1.0.0',
     ],
 )

@@ -4,7 +4,7 @@ import logging
 
 from oauthlib.oauth2 import BackendApplicationClient
 
-from token_refetcher_oauth2session import TokenReFetcherOAuth2Session
+from .token_refetcher_oauth2session import TokenReFetcherOAuth2Session
 
 
 class HTTPError(IOError):
