@@ -3,41 +3,30 @@
 import logging
 
 from oauthlib.oauth2 import BackendApplicationClient
+from requests import models
 
 from .token_refetcher_oauth2session import TokenReFetcherOAuth2Session
 
 
-class HTTPError(IOError):
-    def __init__(self, *args, **kwargs):
-        """Initialize HTTPError with `response` objects."""
-        response = kwargs.pop('response', None)
-        self.response = response
-        super(IOError, self).__init__(*args, **kwargs)
-
-    def __str__(self):
-        return '{} with status code: {}'.format(self.message, self.response.status_code)
-
-
-class Luminate(object):
+class LuminateV2Client(object):
     """User interface to Luminate.
     Clients interact with Luminate by constructing an instance of this object and calling its methods.
     """
 
-    def __init__(self, server, rest_api_version, client_id, client_secret, verify_ssl=True):
+    def __init__(self, server, client_id, client_secret, verify_ssl=True):
         """Construct a Luminate client instance.
         :param server -- luminate api for authenticating, should be like with https://api.<tenant>.luminatesec.com.
-        :param rest_api_version -- the version of the REST resources under rest_path to use. Defaults to ``2``.
         :param client_id -- client_id as provided by the OAuth Provider (Luminate Security)
         :param client_secret -- client_secret as provided by the OAuth Provider (Luminate Security)
         """
-        self._options = {'server': server, 'rest_api_version': rest_api_version}
-
+        self._server = server
         self._create_oauth_session(client_id, client_secret, verify_ssl)
         self._logger = logging.getLogger(__name__)
+        self._api_version = 'v2'
 
     def _create_oauth_session(self, client_id, client_secret, verify_ssl=True):
 
-        token_url = '{}/v1/oauth/token'.format(self._options['server'])
+        token_url = '{}/v1/oauth/token'.format(self._server)
 
         client = BackendApplicationClient(client_id=client_id)
         client.prepare_request_body()
@@ -57,8 +46,7 @@ class Luminate(object):
         :exception: HTTPError in case of unexpected status code
         """
 
-        url_template = '{}/v{}/identities/settings/blocked-users'
-        url = url_template.format(self._options['server'], self._options['rest_api_version'])
+        url = '{}/{}/identities/settings/blocked-users'.format(self._server, self._api_version)
 
         payload = {
             'identity_provider_id': identity_provider_id,
@@ -69,8 +57,7 @@ class Luminate(object):
         self._logger.debug("Request to Luminate for blocking users: returned response: %s, status code:%s"
                            % (response.content, response.status_code))
 
-        if response.status_code != 201:
-            raise HTTPError("failed to block user", response=response)
+        response.raise_for_status()
 
     def unblock_user(self, user_id, identity_provider_id):
         """
@@ -81,8 +68,7 @@ class Luminate(object):
         :exception: HTTPError in case of unexpected status code
         """
 
-        url_template = '{}/v{}/identities/settings/blocked-users'
-        url = url_template.format(self._options['server'], self._options['rest_api_version'])
+        url = '{}/{}/identities/settings/blocked-users'.format(self._server, self._api_version)
 
         payload = {
             'identity_provider_id': identity_provider_id,
@@ -93,8 +79,7 @@ class Luminate(object):
         self._logger.debug("Request to Luminate for unblocking users: returned response: %s, status code:%s"
                            % (response.content, response.status_code))
 
-        if response.status_code != 204:
-            raise HTTPError("failed to unblock user", response=response)
+        response.raise_for_status()
 
     def get_access_logs(self, size, query, search_after):
         """
@@ -108,8 +93,7 @@ class Luminate(object):
         :exception: HTTPError in case of unexpected status code
         """
 
-        url_template = '{}/v{}/logs/access'
-        url = url_template.format(self._options['server'], self._options['rest_api_version'])
+        url = '{}/{}/logs/access'.format(self._server, self._api_version)
 
         payload = {
             'size': size,
@@ -121,9 +105,7 @@ class Luminate(object):
         self._logger.debug("Request to Luminate for access logs: returned response: %s, status code:%s"
                            % (response.content, response.status_code))
 
-        if response.status_code != 200:
-            raise HTTPError("failed to get access logs", response=response)
-
+        response.raise_for_status()
         return response.json()
 
     def get_ssh_access_logs(self, size, query, search_after):
@@ -138,8 +120,7 @@ class Luminate(object):
         :exception: HTTPError in case of unexpected status code
         """
 
-        url_template = '{}/v{}/logs/ssh'
-        url = url_template.format(self._options['server'], self._options['rest_api_version'])
+        url = '{}/{}/logs/ssh'.format(self._server, self._api_version)
 
         payload = {
             'size': size,
@@ -151,9 +132,7 @@ class Luminate(object):
         self._logger.debug("Request to Luminate for ssh access logs: returned response: %s, status code:%s"
                            % (response.content, response.status_code))
 
-        if response.status_code != 200:
-            raise HTTPError("failed to get ssh access logs", response=response)
-
+        response.raise_for_status()
         return response.json()
 
     def get_user(self, user_email):
@@ -164,16 +143,13 @@ class Luminate(object):
         :exception: HTTPError in case of unexpected status code
         """
 
-        url_template = '{}/v{}/identities/users?email={}'
-        url = url_template.format(self._options['server'], self._options['rest_api_version'], user_email)
+        url = '{}/{}/identities/users?email={}'.format(self._server, self._api_version, user_email)
 
         response = self._session.get(url)
         self._logger.debug("Request to Luminate for getting users: returned response: %s, status code:%s"
                            % (response.content, response.status_code))
 
-        if response.status_code != 200:
-            raise HTTPError("failed to get user by email", response=response)
-
+        response.raise_for_status()
         return response.json()
 
     def destroy_user_session(self, user_id, identity_provider_id):
@@ -185,8 +161,7 @@ class Luminate(object):
         :exception: HTTPError in case of unexpected status code
         """
 
-        url_template = '{}/v{}/sessions/destroy'
-        url = url_template.format(self._options['server'], self._options['rest_api_version'])
+        url = '{}/{}/sessions/destroy'.format(self._server, self._api_version)
 
         payload = {
             'identity_provider_id': identity_provider_id,
@@ -197,8 +172,7 @@ class Luminate(object):
         self._logger.debug("Request to Luminate for destroy users sessions: returned response: %s, status code:%s"
                            % (response.content, response.status_code))
 
-        if response.status_code != 204:
-            raise HTTPError("failed to destroy user sessions", response=response)
+        response.raise_for_status()
 
     def __batch_execute(self, f, user_email):
         res = {"success": {}, "failure": {}}
@@ -212,7 +186,7 @@ class Luminate(object):
                 if user.provider_name not in res["success"]:
                     res["success"][user.provider_name] = []
                 res["success"][user.provider_name].append({user.id: "DONE"})
-            except HTTPError as e:
+            except models.HTTPError as e:
                 if user.provider_name not in res["failure"]:
                     res["failure"][user.provider_name] = []
                 res["failure"][user.provider_name].append({user.id: str(e)})
@@ -245,32 +219,30 @@ class Luminate(object):
 
         return self.__batch_execute(self.destroy_user_session, user_email)
 
-    def create_app(self, app_name, description, app_type, internal_address, site_name, ssh_users):
+    def create_app(self, app_name, description, app_type, internal_address, ssh_users):
         """Create a new Application at a specific Site.
         :param app_name: Application Name
         :param description: A string which describes the application
         :param app_type: Application type - Valid values are HTTP, SSH.
         :param internal_address: Application internal IP
-        :param site_name: The name of the site on which this application resides.
         :param ssh_users: A list of user names that are available for SSH log-in on the remote ssh machine.
 
         """
-        connection_settings = {'internal_address': internal_address}
 
-        url_template = '{}/v{}/applications'
-        url = url_template.format(self._options['server'], self._options['rest_api_version'])
+        url = '{}/{}/applications'.format(self._server, self._api_version)
 
         payload = {
-            'name': app_name,
+            'connectionSettings': {
+                "internalAddress": internal_address
+            },
             'description': description,
             'type': app_type,
-            'connection_settings': connection_settings,
-            'site_name': site_name,
+            'name': app_name,
         }
 
         if app_type == 'SSH':
             if ssh_users:
-                payload['ssh_users'] = ssh_users
+                payload['sshSettings'] = {"userAccounts": [{"name": x} for x in ssh_users]}
             else:
                 raise ValueError('A request for creating an SSH application must include SSH users')
 
@@ -278,119 +250,76 @@ class Luminate(object):
         self._logger.debug("Request to Luminate for creating an application :%s returned response: %s, status code:%s"
                            % (app_name, response.content, response.status_code))
 
-        if response.status_code != 201:
-            response.raise_for_status()
-            return None
+        response.raise_for_status()
+        return response.json()
 
-        data = response.json()
-
-        return data['id']
-
-    def update_app(self, app_id, app_name, description, app_type, internal_address, site_name, ssh_users):
-        """Updates an existing application.
-        :param app_id: Application ID
-        :param app_name: Application Name
+    def create_site(self, site_name, description):
+        """Create a new Application at a specific Site.
         :param description: A string which describes the application
-        :param app_type: Application type - Valid values are HTTP, SSH.
-        :param internal_address: Application internal IP
         :param site_name: The name of the site on which this application resides.
-        :param ssh_users: A list of user names that are available for SSH log-in on the remote ssh machine.
 
-         """
+        """
 
-        connection_settings = {'internal_address': internal_address}
-
-        url_template = '{}/v{}/applications/{}'
-
-        url = url_template.format(self._options['server'], self._options['rest_api_version'], app_id)
+        url = '{}/{}/sites/'.format(self._server, self._api_version)
         payload = {
-            'name': app_name,
+            'name': site_name,
             'description': description,
-            'type': app_type,
-            'connection_settings': connection_settings,
-            'site_name': site_name,
         }
 
-        if app_type == 'SSH':
-            if ssh_users:
-                payload['ssh_users'] = ssh_users
-            else:
-                raise ValueError(
-                    'Request to Luminate for updating an application %s failed - missing SSH users' % app_name)
+        response = self._session.post(url, json=payload)
+        self._logger.debug("Request to Luminate for creating an site :%s returned response: %s, status code:%s"
+                           % (site_name, response.content, response.status_code))
 
-        response = self._session.put(url, json=payload)
-        self._logger.debug("Request to Luminate for updating an application :%s returned response: %s, status code:%s"
-                           % (app_name, response.content, response.status_code))
+        response.raise_for_status()
+        return response.json()
 
-        if response.status_code != 200:
-            response.raise_for_status()
-            return -1
+    def bind_app_to_site(self, application_id, site_id):
+        """Assign your Application to an existing Site.
+        :param application_id: the application_id to bind to the site
+        :param site_id: the id of the site to bind the application to
+        """
 
-        return 0
+        url = '{}/{}/applications/{}/site-binding/{}'.format(self._server, self._api_version, application_id, site_id)
+        headers = {'Content-type': 'application/json'}
 
-    def assign_user_to_app(self, app_id, email, idp, ssh_users):
+        response = self._session.put(url, headers=headers)
+        self._logger.debug(
+            "Request to Luminate for binding application to site:%s returned response: %s, status code:%s"
+            % (site_id, response.content, response.status_code))
+
+        response.raise_for_status()
+
+    def assign_entity_to_app(self, app_id, identifier_in_provider, identity_provider_id,
+                             identity_provider_type, entity_type):
         """
         Assign a user to an application.
         :param app_id: Application ID
-        :param email: The e-mail address of the user to whom you would like to grant access to the application.
-        :param idp: Identity Provider of the user.
-        :param ssh_users: A list of user names with which the user will be able to log-in to the ssh machine.
+        :param identifier_in_provider: The identifier of this entity in the identity provider owning this directory entity.
+        :param identity_provider_id: The identity provider owning this directory entity.
+        :param identity_provider_type: The identity provider owning this directory entity (Local/ActiveDirectory/Okta).
+        :param entity_type: type as sting can be User/Group/OU
 
         """
 
-        url_template = '{}/v{}/applications/{}/assign-user'
+        url_template = '{}/{}/applications/{}/directory-entity-bindings/'
 
-        url = url_template.format(self._options['server'], self._options['rest_api_version'], app_id)
+        url = url_template.format(self._server, self._api_version, app_id)
         payload = {
-            'email': email,
-            'idp_name': idp
+            'directoryEntity': {
+                'identifierInProvider': identifier_in_provider,
+                'identityProviderId': identity_provider_id,
+                'identityProviderType': identity_provider_type,
+                'type': entity_type
+            }
         }
 
-        if ssh_users:
-            payload['ssh_users'] = ssh_users
-            self._logger.debug("SSH users: %s were defined for user: %s" % (ssh_users, email))
-
-        response = self._session.post(url, json=payload)
+        response = self._session.put(url, json=payload)
 
         self._logger.debug("Request to Luminate for assigning a user :%s to application %s returned response:\n %s,\
-                            status code:%s" % (email, app_id, response.content, response.status_code))
+                            status code:%s" % (identifier_in_provider, app_id, response.content, response.status_code))
 
-        if response.status_code != 200:
-            response.raise_for_status()
-            return -1
-
-        return 0
-
-    def assign_group_to_app(self, app, name, idp, ssh_users):
-        """
-        Assign a group to an application.
-        :param app: Application ID
-        :param name: The name of the group to which you would like to grant access to the application.
-        :param idp: Identity Provider of the group.
-        :param ssh_users: A list of user names with which the group members will be able to log-in to the ssh machine.
-
-        """
-
-        url_template = '{}/v{}/applications/{}/assign-group'
-
-        url = url_template.format(self._options['server'], self._options['rest_api_version'], app)
-        payload = {
-            'name': name,
-            'idp_name': idp
-        }
-
-        if ssh_users:
-            payload['ssh_users'] = ssh_users
-            self._logger.debug("SSH users: %s were defined for group: %s" % (ssh_users, name))
-
-        response = self._session.post(url, json=payload)
-
-        self._logger.debug("Request to Luminate for assigning a group :%s to application %s returned response:\n %s,\
-                            status code:%s" % (name, app, response.content, response.status_code))
-
-        if response.status_code != 200:
-            response.raise_for_status()
-        return 0
+        response.raise_for_status()
+        return response.json()
 
     @staticmethod
     def __filter_safe_user_id_identity_provider(results):
