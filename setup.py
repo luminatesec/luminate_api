@@ -11,7 +11,6 @@ setup(
     description='Python implementation of Luminate V2 REST API',
     install_requires=[
         'oauthlib==2.1.0',
-        'requests-oauthlib==1.0.0',
-        'requests'
+        'requests-oauthlib==1.0.0'
     ],
 )

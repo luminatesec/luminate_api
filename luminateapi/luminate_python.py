@@ -3,7 +3,6 @@
 import logging
 
 from oauthlib.oauth2 import BackendApplicationClient
-from requests import models
 
 from .token_refetcher_oauth2session import TokenReFetcherOAuth2Session
 
@@ -57,7 +56,7 @@ class LuminateV2Client(object):
         self._logger.debug("Request to Luminate for blocking users: returned response: %s, status code:%s"
                            % (response.content, response.status_code))
 
-        response.raise_for_status()
+        raise_for_status(response)
 
     def unblock_user(self, user_id, identity_provider_id):
         """
@@ -79,7 +78,7 @@ class LuminateV2Client(object):
         self._logger.debug("Request to Luminate for unblocking users: returned response: %s, status code:%s"
                            % (response.content, response.status_code))
 
-        response.raise_for_status()
+        raise_for_status(response)
 
     def get_access_logs(self, size, query, search_after):
         """
@@ -105,7 +104,7 @@ class LuminateV2Client(object):
         self._logger.debug("Request to Luminate for access logs: returned response: %s, status code:%s"
                            % (response.content, response.status_code))
 
-        response.raise_for_status()
+        raise_for_status(response)
         return response.json()
 
     def get_ssh_access_logs(self, size, query, search_after):
@@ -132,7 +131,7 @@ class LuminateV2Client(object):
         self._logger.debug("Request to Luminate for ssh access logs: returned response: %s, status code:%s"
                            % (response.content, response.status_code))
 
-        response.raise_for_status()
+        raise_for_status(response)
         return response.json()
 
     def get_user(self, user_email):
@@ -149,7 +148,7 @@ class LuminateV2Client(object):
         self._logger.debug("Request to Luminate for getting users: returned response: %s, status code:%s"
                            % (response.content, response.status_code))
 
-        response.raise_for_status()
+        raise_for_status(response)
         return response.json()
 
     def destroy_user_session(self, user_id, identity_provider_id):
@@ -172,7 +171,7 @@ class LuminateV2Client(object):
         self._logger.debug("Request to Luminate for destroy users sessions: returned response: %s, status code:%s"
                            % (response.content, response.status_code))
 
-        response.raise_for_status()
+        raise_for_status(response)
 
     def __batch_execute(self, f, user_email):
         res = {"success": {}, "failure": {}}
@@ -186,10 +185,10 @@ class LuminateV2Client(object):
                 if user.provider_name not in res["success"]:
                     res["success"][user.provider_name] = []
                 res["success"][user.provider_name].append({user.id: "DONE"})
-            except models.HTTPError as e:
+            except HTTPError as e:
                 if user.provider_name not in res["failure"]:
                     res["failure"][user.provider_name] = []
-                res["failure"][user.provider_name].append({user.id: str(e)})
+                res["failure"][user.provider_name].append({user.id: e.to_json()})
         return res
 
     def block_user_by_email(self, user_email):
@@ -250,7 +249,7 @@ class LuminateV2Client(object):
         self._logger.debug("Request to Luminate for creating an application :%s returned response: %s, status code:%s"
                            % (app_name, response.content, response.status_code))
 
-        response.raise_for_status()
+        raise_for_status(response)
         return response.json()
 
     def create_site(self, site_name, description):
@@ -270,7 +269,7 @@ class LuminateV2Client(object):
         self._logger.debug("Request to Luminate for creating an site :%s returned response: %s, status code:%s"
                            % (site_name, response.content, response.status_code))
 
-        response.raise_for_status()
+        raise_for_status(response)
         return response.json()
 
     def bind_app_to_site(self, application_id, site_id):
@@ -287,7 +286,7 @@ class LuminateV2Client(object):
             "Request to Luminate for binding application to site:%s returned response: %s, status code:%s"
             % (site_id, response.content, response.status_code))
 
-        response.raise_for_status()
+        raise_for_status(response)
 
     def assign_entity_to_app(self, app_id, identifier_in_provider, identity_provider_id,
                              identity_provider_type, entity_type):
@@ -318,7 +317,7 @@ class LuminateV2Client(object):
         self._logger.debug("Request to Luminate for assigning a user :%s to application %s returned response:\n %s,\
                             status code:%s" % (identifier_in_provider, app_id, response.content, response.status_code))
 
-        response.raise_for_status()
+        raise_for_status(response)
         return response.json()
 
     @staticmethod
@@ -339,3 +338,47 @@ class UserInst(object):
         self.id = user_id
         self.provider_id = provider_id
         self.provider_name = provider_name
+
+
+class HTTPError(Exception):
+    def __init__(self, message, response):
+        self.message = message
+        self.response = response
+
+    def __str__(self):
+        return '{} with content: {}'.format(self.message, self.response.text)
+
+    def to_json(self):
+        return {
+            "content": self.response.content,
+            "status_code": self.response.status_code,
+            "message": self.message
+        }
+
+
+def raise_for_status(requests_response):
+    """Raises stored :class:`HTTPError`, if one occurred."""
+
+    http_error_msg = ''
+    if isinstance(requests_response.reason, bytes):
+        # We attempt to decode utf-8 first because some servers
+        # choose to localize their reason strings. If the string
+        # isn't utf-8, we fall back to iso-8859-1 for all other
+        # encodings. (See PR #3538)
+        try:
+            reason = requests_response.reason.decode('utf-8')
+        except UnicodeDecodeError:
+            reason = requests_response.reason.decode('iso-8859-1')
+    else:
+        reason = requests_response.reason
+
+    if 400 <= requests_response.status_code < 500:
+        http_error_msg = u'%s Client Error: %s for url: %s' % (
+            requests_response.status_code, reason, requests_response.url)
+
+    elif 500 <= requests_response.status_code < 600:
+        http_error_msg = u'%s Server Error: %s for url: %s' % (
+            requests_response.status_code, reason, requests_response.url)
+
+    if http_error_msg:
+        raise HTTPError(http_error_msg, response=requests_response)
