@@ -8,7 +8,7 @@ API_KEY = '<api_key>'
 API_SECRET = '<api_secret>'
 VERIFY_CERTIFICATE = True
 
-TEST_USER_EMAIL = "<local_user_email>"
+TEST_USER_EMAIL = "block_test@dodger.luminatesite.com"
 
 if __name__ == '__main__':
     # Create a V2 Client
@@ -26,7 +26,7 @@ if __name__ == '__main__':
     pprint.pprint(unblock_res)
 
     # Creating SSH Application
-    ssh_app_res = luminate_client.create_app("client-ssh-test",
+    ssh_app_res = luminate_client.create_app("client-ssh-test91",
                                              "description",
                                              "SSH",
                                              "tcp://127.0.0.1:8000",
@@ -79,8 +79,13 @@ if __name__ == '__main__':
         "from_date": int((time.time() - 1000) * 1000),
         "to_date": int(time.time() * 1000),
     }
+
     http_logs_res = luminate_client.get_access_logs(2, query, None)
     pprint.pprint(http_logs_res)
 
     ssh_logs_res = luminate_client.get_ssh_access_logs(2, query, None)
+    pprint.pprint(ssh_logs_res)
+
+    # Get Alerts
+    ssh_logs_res = luminate_client.get_alerts(2, query, None)
     pprint.pprint(ssh_logs_res)

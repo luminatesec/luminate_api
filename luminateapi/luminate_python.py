@@ -134,6 +134,33 @@ class LuminateV2Client(object):
         raise_for_status(response)
         return response.json()
 
+    def get_alerts(self, size, query, search_after):
+        """
+        Gets Alerts from Luminate
+        For more info https://luminatepublicapi.docs.apiary.io
+        :param size: The maximum number of results to return. This is limited to 1000, and defaults to 1000
+        :param query: json describe the query
+        :param search_after: Using search_after you may page through results, You will need to provide the search_after
+        values of the last log line in the previous result.
+        :return: json with the results
+        :exception: HTTPError in case of unexpected status code
+        """
+
+        url = '{}/{}/logs/alerts'.format(self._server, self._api_version)
+
+        payload = {
+            'size': size,
+            'query': query,
+            'search_after': search_after,
+        }
+
+        response = self._session.post(url, json=payload)
+        self._logger.debug("Request to Luminate for alerts: returned response: %s, status code:%s"
+                           % (response.content, response.status_code))
+
+        raise_for_status(response)
+        return response.json()
+
     def get_user(self, user_email):
         """
         Gets all users with this email from all installed identity providers
