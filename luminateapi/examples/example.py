@@ -87,5 +87,5 @@ if __name__ == '__main__':
     pprint.pprint(ssh_logs_res)
 
     # Get Alerts
-    ssh_logs_res = luminate_client.get_alerts(2, query, None)
-    pprint.pprint(ssh_logs_res)
+    alert_logs_res = luminate_client.get_alerts(2, query, None)
+    pprint.pprint(alert_logs_res)
