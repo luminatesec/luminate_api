@@ -4,6 +4,28 @@ The specification states that Client Credentials Grant SHOULD NOT return a refre
 (https://tools.ietf.org/html/rfc6749#section-4.4.3).
 Therefore, a New token is needed when token expired.
 
+In some cases, the API Server may require OAuth2 auth flow of its own. In this case, the API Client should perform
+the OAuth request for a Luminate Session Token, and then perform the same sequence with the API Server, while
+providing the Luminate Session Token in a special HTTPS Header called "lum-api-token" (while the API Server
+session will use the "Authorization" Header.
+
+for a given token:
+{
+    u'access_token': u'3218d2c4-294d-41cc-b6b2-92118b7916d7',
+    u'scope': [u'luminate-scope'],
+    u'token_type': u'Bearer',
+    u'expires_in': 3600,
+    u'expires_at': 1548951121.805377
+}
+
+just add
+headers["lum-api-token"]='3218d2c4-294d-41cc-b6b2-92118b7916d7'
+
+Upon receiving a request that contains both "lum-api-token" and "Authorization" headers, Luminate Secure
+Access cloud assumes that the Luminate Session Token is located in the "lum-api-token" header, otherwise
+authorization is performed against the content of the standard "Authorization" header.
+For more information please visit https://support.luminate.io/hc/en-us/articles/360002006572
+
 :Example:
 
     from oauthlib import oauth2
@@ -42,25 +64,25 @@ class TokenReFetcherOAuth2Session(requests_oauthlib.OAuth2Session):
         self.client_secret = client_secret
         self.verify = verify
         self._logger = logging.getLogger(__name__)
+        self._token = None
 
         super(TokenReFetcherOAuth2Session, self).__init__(**kwargs)
 
         self.fetch_token()
 
-    def request(self, method, url, data=None, headers=None, withhold_token=False,
-                client_id=None, client_secret=None, **kwargs):
+    def request(self, method, url, data=None, headers=None, **kwargs):
         try:
-            return super(TokenReFetcherOAuth2Session, self).request(method, url,
-                                                                    headers=headers, data=data, **kwargs)
+            return self.__make_request(method, url, headers=headers, data=data, **kwargs)
         except rfc6749.errors.TokenExpiredError:
-            self._logger.debug("TokenExpiredError, Refreshing!")
             self.fetch_token()
 
-            return super(TokenReFetcherOAuth2Session, self).request(method, url,
-                                                                    headers=headers, data=data, **kwargs)
+            return self.__make_request(method, url, headers=headers, data=data, **kwargs)
+
+    def __make_request(self, method, url, data=None, headers=None, **kwargs):
+        return super(TokenReFetcherOAuth2Session, self).request(method, url, headers=headers, data=data, **kwargs)
 
     def fetch_token(self):
-
+        self._logger.debug("Refreshing Token")
         return super(TokenReFetcherOAuth2Session, self).fetch_token(token_url=self.token_url,
                                                                     client_id=self.client_id,
                                                                     client_secret=self.client_secret,
