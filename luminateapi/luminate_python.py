@@ -1,8 +1,13 @@
 #!/usr/bin/python
-
+import json
 import logging
+import pprint
 
 from oauthlib.oauth2 import BackendApplicationClient
+
+from .dto import common
+from .dto.app_dynamic_ssh import CloudIntegrationData
+from .dto.app_tcp import TCPTunnelSetting
 
 from .token_refetcher_oauth2session import TokenReFetcherOAuth2Session
 
@@ -12,18 +17,19 @@ class LuminateV2Client(object):
     Clients interact with Luminate by constructing an instance of this object and calling its methods.
     """
 
-    def __init__(self, server, client_id, client_secret, verify_ssl=True):
+    def __init__(self, server, client_id, client_secret, verify_ssl_certificate=True):
         """Construct a Luminate client instance.
         :param server -- luminate api for authenticating, should be like with https://api.<tenant>.luminatesec.com.
         :param client_id -- client_id as provided by the OAuth Provider (Luminate Security)
         :param client_secret -- client_secret as provided by the OAuth Provider (Luminate Security)
+        :param verify_ssl_certificate: Verify SSL certificate.
         """
         self._server = server
-        self._create_oauth_session(client_id, client_secret, verify_ssl)
+        self._create_oauth_session(client_id, client_secret, verify_ssl_certificate)
         self._logger = logging.getLogger(__name__)
         self._api_version = 'v2'
 
-    def _create_oauth_session(self, client_id, client_secret, verify_ssl=True):
+    def _create_oauth_session(self, client_id, client_secret, verify_ssl_certificate=True):
 
         token_url = '{}/v1/oauth/token'.format(self._server)
 
@@ -32,7 +38,7 @@ class LuminateV2Client(object):
         oauth = TokenReFetcherOAuth2Session(token_url=token_url,
                                             client_secret=client_secret,
                                             client=client,
-                                            verify=verify_ssl)
+                                            verify=verify_ssl_certificate)
 
         self._session = oauth
 
@@ -246,7 +252,8 @@ class LuminateV2Client(object):
         return self.__batch_execute(self.destroy_user_session, user_email)
 
     def create_app(self, app_name, description, app_type, internal_address, ssh_users):
-        """Create a new Application at a specific Site.
+        """ DEPRECATED -  use create_app_<type> instead.
+        Create a new Application at a specific Site.
         :param app_name: Application Name
         :param description: A string which describes the application
         :param app_type: Application type - Valid values are HTTP, SSH.
@@ -254,6 +261,8 @@ class LuminateV2Client(object):
         :param ssh_users: A list of user names that are available for SSH log-in on the remote ssh machine.
 
         """
+
+        logging.warning("create_app is DEPRECATED use create_app_{} instead".format(app_type.lower()))
 
         url = '{}/{}/applications'.format(self._server, self._api_version)
 
@@ -279,10 +288,162 @@ class LuminateV2Client(object):
         raise_for_status(response)
         return response.json()
 
+    def create_app_http(self, app_name, internal_address):
+        """Create a new HTTP Application at a specific Site.
+        :param app_name: Application Name
+        :param internal_address: Application internal IP
+
+        """
+        if (internal_address == "" or (not internal_address.startswith("http://") and not internal_address.startswith(
+                "https://"))):
+            raise Exception("internal_address needs to start with 'http[s]://' i.e http://127.0.0.1")
+
+        url = '{}/{}/applications'.format(self._server, self._api_version)
+
+        payload = {
+            'connectionSettings': {
+                "internalAddress": internal_address,
+                "customRootPath": None,
+                "healthUrl": "/HealthCheck",
+                "healthMethod": "Head"
+            },
+            'type': "HTTP",
+            'name': app_name,
+            "isVisible": True,
+            "isNotificationEnabled": False,
+            "linkTranslationSettings": {
+                "isDefaultContentRewriteRulesEnabled": True,
+                "isDefaultHeaderRewriteRulesEnabled": True,
+                "useExternalAddressForHostAndSni": False,
+                "linkedApplications": []
+            },
+            "requestCustomizationSettings":
+                {
+                    "X-Forwarded-For": "$SOURCEIP$",
+                    "X-Forwarded-Host": "$ORIGINALHOST$",
+                    "X-Forwarded-Proto": "$PROTOCOL$"
+                }
+
+        }
+
+        response = self._session.post(url, json=payload)
+        self._logger.debug("Request to Luminate for creating an application :%s returned response: %s, status code:%s"
+                           % (app_name, response.content, response.status_code))
+
+        raise_for_status(response)
+        return response.json()
+
+    def create_app_ssh(self, app_name, internal_address, ssh_users):
+        """Create a new SSH Application at a specific Site.
+        :param app_name: Application Name
+        :param internal_address: Application internal IP
+        :param ssh_users: A list of user names that are available for SSH log-in on the remote ssh machine.
+        """
+        if internal_address == "" or not internal_address.startswith("tcp://"):
+            raise Exception("internal_address needs to start with 'tcp://' i.e tcp://127.0.0.1:22")
+
+        url = '{}/{}/applications'.format(self._server, self._api_version)
+
+        payload = {
+            "type": "SSH",
+            "name": app_name,
+            "isVisible": True,
+            "isNotificationEnabled": False,
+            "connectionSettings": {
+                "internalAddress": internal_address
+            },
+            'sshSettings':
+                {"userAccounts": [{"name": x} for x in ssh_users]}
+        }
+
+        response = self._session.post(url, json=payload)
+        self._logger.debug("Request to Luminate for creating an application :%s returned response: %s, status code:%s"
+                           % (app_name, response.content, response.status_code))
+
+        raise_for_status(response)
+        return response.json()
+
+    def create_app_rdp(self, app_name, internal_address):
+        """Create a new RDP Application at a specific Site.
+        :param app_name: Application Name
+        :param internal_address: Application internal IP
+        """
+        if internal_address == "" or not internal_address.startswith("tcp://"):
+            raise Exception("internal_address needs to start with 'tcp://' i.e tcp://127.0.0.1:3389")
+
+        url = '{}/{}/applications'.format(self._server, self._api_version)
+
+        payload = {
+            "type": "RDP",
+            "name": app_name,
+            "isVisible": True,
+            "isNotificationEnabled": False,
+            "connectionSettings": {
+                "internalAddress": internal_address,
+            },
+            "rdpSettings": {
+                "isLongTermPasswordEnabled": False
+            }
+        }
+
+        response = self._session.post(url, json=payload)
+        self._logger.debug("Request to Luminate for creating an application :%s returned response: %s, status code:%s"
+                           % (app_name, response.content, response.status_code))
+
+        raise_for_status(response)
+        return response.json()
+
+    def create_app_dynamic_ssh(self, app_name, cloud_integration_data):
+        """Create a new RDP Application at a specific Site.
+        :param app_name: Application Name
+        :param cloud_integration_data: holds all information needed for the integration
+        """
+        url = '{}/{}/applications'.format(self._server, self._api_version)
+
+        payload = {
+            "type": "DYNAMIC_SSH",
+            "name": app_name,
+            "isVisible": True,
+            "isNotificationEnabled": False,
+            "connectionSettings": {},
+            "cloudIntegrationData": common.to_class(CloudIntegrationData, cloud_integration_data)
+        }
+
+        pprint.pprint(json.dumps(payload))
+
+        response = self._session.post(url, json=payload)
+        self._logger.debug("Request to Luminate for creating an application :%s returned response: %s, status code:%s"
+                           % (app_name, response.content, response.status_code))
+
+        raise_for_status(response)
+        return response.json()
+
+    def create_app_tcp(self, app_name, tcp_tunnel_settings):
+        """Create a new TCP Application at a specific Site.
+        :param app_name: Application Name
+        :param tcp_tunnel_settings: tcp tunnel configuration
+        """
+        url = '{}/{}/applications'.format(self._server, self._api_version)
+
+        payload = {
+            "type": "TCP",
+            "name": app_name,
+            "isVisible": True,
+            "isNotificationEnabled": False,
+            "connectionSettings": {},
+            "tcpTunnelSettings": common.from_list(lambda x: common.to_class(TCPTunnelSetting, x), tcp_tunnel_settings)
+        }
+        response = self._session.post(url, json=payload)
+        self._logger.debug("Request to Luminate for creating an application :%s returned response: %s, status code:%s"
+                           % (app_name, response.content, response.status_code))
+
+        raise_for_status(response)
+        return response.json()
+
     def create_site(self, site_name, description):
-        """Create a new Application at a specific Site.
-        :param description: A string which describes the application
-        :param site_name: The name of the site on which this application resides.
+        """Create a new Site.
+        :param description: A string which describes the site
+        :param site_name: The name of the site.
 
         """
 
@@ -324,7 +485,6 @@ class LuminateV2Client(object):
         :param identity_provider_id: The identity provider owning this directory entity.
         :param identity_provider_type: The identity provider owning this directory entity (Local/ActiveDirectory/Okta).
         :param entity_type: type as sting can be User/Group/OU
-
         """
 
         url_template = '{}/{}/applications/{}/directory-entity-bindings/'
